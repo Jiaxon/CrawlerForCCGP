@@ -72,7 +72,7 @@ def crawler_ccgp(sheetdata=[], year='', buyerName=''):
         'pinMu': 0,
         'bidType': 0,
         'dbselect': 'bidx',
-        'kw': '等级保护',  # 搜索关键词
+        'kw': '',  # 搜索关键词
         'start_time': start_time,
         'end_time': end_time,
         'timeType': 6,
