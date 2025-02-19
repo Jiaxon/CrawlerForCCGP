@@ -1,0 +1,7 @@
+# config.py
+SMTP_SERVER = ""
+SMTP_PORT = 465
+SENDER_EMAIL = ""
+SENDER_PASSWORD = ""
+RECEIVER_EMAIL = ""
+# QCie85U8WTkwX8av
