@@ -149,6 +149,32 @@ python Integrated(version=1.0).py
 
 ---
 
+### 依赖包说明
+1. `pandas`：
+- 用于数据处理和分析，支持将数据存储为 Excel 文件。
+2. `xlsxwriter`：
+- 用于生成 Excel 文件，支持格式化、图表等功能。
+3. `requests`：
+- 用于发送 HTTP 请求，抓取网页内容。
+4. `lxml`：
+- 用于解析 HTML 和 XML 文档，提取所需数据。
+5. `selenium`：
+- 用于处理动态网页内容，支持浏览器自动化操作。
+6. `beautifulsoup4`：
+- 用于解析 HTML 文档，提取结构化数据。
+7. `smtplib` 和 `email`：
+- 用于发送邮件通知，支持 HTML 格式的邮件内容。
+8. `numpy`：
+- 用于数值计算，支持高效的数据处理。
+9. `openpyxl`：
+- 用于读取和写入 Excel 文件，支持复杂的数据操作。
+10. `python-dateutil`：
+- 用于处理日期和时间，支持日期格式化和计算。
+11. `chardet`：
+- 用于检测网页编码，确保正确解析网页内容。
+
+---
+
 ## 联系方式  
 如有问题或建议，请联系:  
 - 邮箱：commonboeotian@gmail.com
