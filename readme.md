@@ -22,7 +22,7 @@
   def main():
       # 可修改年份参数控制抓取范围
       sheetdata = ccgp_get.crawler_ccgp([], str(datetime.now().year), '')
-  
+  ```
 --- 
 
 ### 2. 数据爬取模块 (`ccgp_get.py`)  
@@ -39,7 +39,7 @@
         'start_time': '2025:02:01',  # 开始日期
         'end_time': '2025:02:14'     # 结束日期
     }  
-
+  ```
 ---
 
 ### 3. 数据处理模块 (`DataProcessing.py`)  
@@ -50,6 +50,7 @@
 - **使用方法**：
   ```python
   existing_df = load_existing_data("existing_data.xlsx")  # 自定义历史数据文件路径  
+  ```
 
 --- 
 
@@ -59,7 +60,8 @@
   SMTP_SERVER = "smtp.example.com"    # SMTP服务器地址
   SENDER_EMAIL = "sender@example.com" # 发件邮箱
   RECEIVER_EMAIL = "receiver@example.com" # 收件邮箱
-  
+  ``` 
+
 ---
 
 ## 运行指南
@@ -70,15 +72,15 @@
 
 ### 快速启动
 
-### &nbsp;&nbsp;1.配置SMTP
+### 1. 配置SMTP
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;编辑`config.py`填写邮箱服务信息
 
-### &nbsp;&nbsp;2.首次运行
+### 2. 首次运行
   ```bash
   python Integrated(version=1.0).py  
   ```
 
-### &nbsp;&nbsp;3.自定义爬取参数
+### 3. 自定义爬取参数
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;修改`ccgp_get.py`中的爬取参数：
   ```python
   # 修改搜索关键词
@@ -87,15 +89,52 @@
   # 修改目标区域
   params['displayZone'] = '北京'
   params['zoneId'] = '11'  # 区域编码参考网站实际值
-  ```
+  ```  
 
-### &nbsp;&nbsp;4.调整时间范围
+### 4. 调整时间范围  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;修改`crawler_ccgp`函数中的时间计算逻辑：
   ```python
   # 默认抓取最近30天数据
   start_date = curr_date - timedelta(days=30)  # 修改days值调整范围
   ```
 
+### 5. Seleniumm环境配置  
+1. 安装浏览器驱动   
+程序依赖Chrome浏览器及对应版本的ChromeDriver，需完成以下步骤：   
+	1. 安装Chrome浏览器 
+		- 官网下载地址：https://www.google.com/chrome/  
+	2.  下载ChromeDriver  
+		- 访问 ChromeDriver官网  
+ 		- 选择与本地Chrome浏览器版本号完全一致的驱动下载    
+		- 将下载的驱动文件（如chromedriver.exe）放置到以下任一位置：
+			- 系统环境变量PATH包含的目录中（推荐）  
+			- 项目根目录下   
+2. 无头模式配置（可选）
+若需后台运行浏览器，修改crawler_ccgp函数中的代码：
+```python
+# 在文件顶部添加以下导入
+from selenium.webdriver.chrome.options import Options
+
+# 修改原有代码：
+options = Options()
+options.add_argument("--headless")  # 启用无头模式
+options.add_argument("--disable-gpu")  # 禁用GPU加速
+driver = webdriver.Chrome(options=options)  # 替换原 driver = webdriver.Chrome()
+```  
+3. 跨操作系统注意事项
+- Windows
+直接使用chromedriver.exe，确保路径已加入系统环境变量  
+- macOS/Linux  
+	1. 下载对应系统的驱动（如chromedriver_mac64.zip或chromedriver_linux64.zip）
+	2. 解压后通过终端赋予执行权限：  	
+	```bash
+	chmod +x /path/to/chromedriver
+	```
+
+## 完整依赖安装命令
+```bash
+pip install selenium pandas xlsxwriter requests lxml beautifulsoup4 chardet python-dateutil openpyxl
+```
 ---
 
 ## 输出文件
