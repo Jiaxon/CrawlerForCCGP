@@ -32,7 +32,7 @@
   - 自动提取公告详情链接
 
 - **关键参数**：
-  ```python
+  ```python 
   params = {
         'kw': '',        # 搜索关键词
         'displayZone': '',   # 目标区域
