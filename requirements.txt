@@ -1,16 +1,4 @@
-# 核心依赖 - 修复版本兼容性
-pandas>=1.4.2
-xlsxwriter>=3.2.2
-requests>=2.31.0
-urllib3>=1.26.18,<2.0.0
-charset-normalizer>=3.0.0
-lxml>=4.9.0
-selenium>=4.1.5
-beautifulsoup4>=4.11.1
-
-# 数据处理
-numpy>=1.22.3
-openpyxl>=3.1.5
-
-# 其他工具
-python-dateutil>=2.8.2
+PyQt6==6.4.0
+requests==2.31.0
+lxml==4.9.3
+xlsxwriter==3.1.2

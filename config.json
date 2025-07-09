@@ -1,0 +1,14 @@
+{
+    "buyer_name": "",
+    "keyword": "医疗设备",
+    "start_date": "2025:07:09",
+    "end_date": "2025:07:09",
+    "zone_id": "45",
+    "bid_type": "1",
+    "save_path": "",
+    "output_prefix": "",
+    "agent_name": "",
+    "min_delay": 2,
+    "max_delay": 6,
+    "auto_save": true
+}
