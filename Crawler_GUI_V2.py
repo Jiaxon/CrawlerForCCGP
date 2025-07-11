@@ -655,7 +655,7 @@ class MainWindow(QMainWindow):
             self.start_date_input.setDate(QDate.fromString(config.get("start_date", QDate.currentDate().addDays(-3).toString("yyyy:MM:dd")), "yyyy:MM:dd"))
             self.end_date_input.setDate(QDate.fromString(config.get("end_date", QDate.currentDate().toString("yyyy:MM:dd")), "yyyy:MM:dd"))
 
-            # Set ComboBoxes by data, not text
+
             zone_id = config.get("zone_id", "45")
             index = self.region_combo.findData(zone_id)
             if index != -1: self.region_combo.setCurrentIndex(index)
