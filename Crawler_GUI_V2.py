@@ -64,10 +64,32 @@ class Worker(QObject):
         self.config = config
         self.is_running = True
         self.current_crawled_data = []
+        self.session = requests.Session()  # 使用会话管理网络连接
+        
+        # 禁用代理以避免连接问题
+        self.session.trust_env = False
+        
+        # 根据配置设置代理
+        if config.get('use_proxy', False):
+            proxy_host = config.get('proxy_host', '127.0.0.1')
+            proxy_port = config.get('proxy_port', 7890)
+            proxy_url = f"http://{proxy_host}:{proxy_port}"
+            self.session.proxies = {
+                'http': proxy_url,
+                'https': proxy_url
+            }
+        else:
+            self.session.proxies = {}
 
     def stop(self):
         self.progress_update.emit("正在请求停止...")
         self.is_running = False
+        # 关闭网络会话
+        if hasattr(self, 'session'):
+            try:
+                self.session.close()
+            except:
+                pass
 
     def run(self):
         """执行爬虫任务"""
@@ -105,6 +127,12 @@ class Worker(QObject):
         except Exception as e:
             self.error.emit(f"程序执行过程中发生错误: {e}")
         finally:
+            # 确保在结束时关闭网络会话
+            if hasattr(self, 'session'):
+                try:
+                    self.session.close()
+                except:
+                    pass
             self.finished.emit()
 
     def _save_interrupted_data(self):
@@ -129,59 +157,102 @@ class Worker(QObject):
 
     def _get_request_headers(self, referer=None):
         user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:100.0) Gecko/20100101 Firefox/100.0',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36'
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0'
         ]
         ua = random.choice(user_agents)
         headers = {
-            "User-Agent": ua, "Host": "search.ccgp.gov.cn",
+            "User-Agent": ua, 
+            "Host": "search.ccgp.gov.cn",
             "Referer": referer if referer else "http://search.ccgp.gov.cn/",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Encoding": "gzip, deflate", "Accept-Language": "zh-CN,zh;q=0.9",
-            "Connection": "keep-alive", "Upgrade-Insecure-Requests": "1"
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Encoding": "gzip, deflate", 
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Connection": "keep-alive", 
+            "Upgrade-Insecure-Requests": "1",
+            "Cache-Control": "max-age=0"
         }
         return headers
 
     def _open_url(self, url, params, refer=None):
         headers = self._get_request_headers(refer)
-        min_delay = self.config.get('min_delay', 2)
-        max_delay = self.config.get('max_delay', 6)
-        delay_seconds = random.randint(min_delay, max_delay)
-        self.progress_update.emit(f"等待 {delay_seconds} 秒以避免频繁请求...")
+        delay_seconds = 3  # 固定延迟
+        self.progress_update.emit(f"等待 {delay_seconds} 秒...")
         time.sleep(delay_seconds)
-        response = requests.get(url, headers=headers, params=params, allow_redirects=True)
-        if response.status_code != 200:
-            self.progress_update.emit(f"请求失败: {response.status_code}")
-        return response
+        
+        try:
+            response = self.session.get(url, headers=headers, params=params, timeout=30)
+            return response
+        except Exception as e:
+            self.progress_update.emit(f"网络错误: {str(e)[:30]}")
+            raise
 
     def _crawler_ccgp_threaded(self):
         sheetdata = []
         url = 'http://search.ccgp.gov.cn/bxsearch?'
         
         # 使用GUI传入的日期
-        start_time = self.config['start_date']
-        end_time = self.config['end_date']
+        start_date_str = self.config['start_date']
+        end_date_str = self.config['end_date']
         
+        # 添加调试信息
+        self.progress_update.emit(f"使用时间范围: {start_date_str} 至 {end_date_str}")
+        
+        # 使用最简单的参数格式
         params = {
-            'searchtype': 1, 'page_index': 1, 'bidSort': 0,
-            'buyerName': self.config['buyer_name'], 'projectId': '', 
+            'searchtype': 1, 
+            'page_index': 1, 
+            'bidSort': 0,
+            'buyerName': self.config.get('buyer_name', ''), 
+            'projectId': '', 
             'pinMu': 0, 
-            'bidType': self.config['bid_type'],
+            'bidType': self.config.get('bid_type', '0'),
             'dbselect': 'bidx', 
-            'kw': self.config['keyword'], 
-            'start_time': start_time,
-            'end_time': end_time, 
-            'timeType': 0,
+            'kw': self.config.get('keyword', ''),  # 不设置默认值
+            'start_time': start_date_str,
+            'end_time': end_date_str,
+            'timeType': self.config.get('time_type', 6),  # 使用配置中的timeType
             'displayZone': '',
-            'zoneId': self.config['zone_id'],
+            'zoneId': self.config.get('zone_id', ''),
             'pppStatus': 0, 
-            'agentName': self.config['agent_name']
+            'agentName': self.config.get('agent_name', '')
         }
+        
+        # 简单清理空参数，但保留重要参数
+        cleaned_params = {}
+        for k, v in params.items():
+            if k == 'kw':  # 关键字参数处理
+                # 如果用户没有输入关键字，使用空字符串而不是默认值
+                user_keyword = self.config.get('keyword', '').strip()
+                cleaned_params[k] = user_keyword if user_keyword else ''
+            elif k == 'dbselect':  # dbselect必须是字符串
+                cleaned_params[k] = 'bidx'
+            elif k in ['searchtype', 'page_index', 'bidSort', 'pinMu', 'pppStatus', 'timeType']:
+                # 这些参数转换为整数
+                try:
+                    cleaned_params[k] = int(v) if v != '' else 0
+                except (ValueError, TypeError):
+                    cleaned_params[k] = 0
+            elif k == 'bidType':
+                # bidType保持字符串格式
+                cleaned_params[k] = str(v) if v is not None else '0'
+            elif k in ['start_time', 'end_time']:  # 时间参数必须保留
+                cleaned_params[k] = v
+            elif v is not None and str(v).strip():
+                cleaned_params[k] = v
+        
+        # 添加参数调试信息
+        self.progress_update.emit(f"API参数: {cleaned_params}")
+        
+        # 构建并显示完整的API URL
+        from urllib.parse import urlencode
+        full_url = url + urlencode(cleaned_params)
+        self.progress_update.emit(f"完整API URL: {full_url}")
         
         try:
             self.progress_update.emit("开始获取数据...")
-            resp = self._open_url(url, params)
+            resp = self._open_url(url, cleaned_params)
             if not self.is_running: return sheetdata
             resp.raise_for_status()
             html = resp.content.decode('utf-8')
@@ -212,16 +283,35 @@ class Worker(QObject):
                     for i, li in enumerate(list_items):
                         if not self.is_running: break
                         try:
+                            # 添加空值检查
                             title_element = li.find('a')
                             summary_element = li.find('p')
                             span_element = li.find('span')
                             
-                            if title_element is None or summary_element is None or span_element is None: continue
-                            
-                            title = title_element.text.strip()
-                            link_href = title_element.get('href')
+                            if title_element is None or summary_element is None or span_element is None: 
+                                self.progress_update.emit("  跳过无效数据项")
+                                continue
+                                
+                            # 安全获取文本内容
+                            title = title_element.text.strip() if title_element.text else ''
+                            if not title:
+                                self.progress_update.emit("  跳过空标题项")
+                                continue
+                                
+                            link_href = title_element.get('href', '')
                             summary = summary_element.text.strip() if summary_element.text else ''
-                            info = span_element.xpath('string()').replace(' ', '').replace('\r', '').replace('\n', '').replace('\t', '')
+                            
+                            # 安全获取span内容
+                            span_text = span_element.xpath('string()')
+                            if not span_text:
+                                self.progress_update.emit("  跳过空span项")
+                                continue
+                                
+                            info = span_text.replace(' ', '').replace('\r', '').replace('\n', '').replace('\t', '')
+                            
+                            if len(info) < 10:
+                                self.progress_update.emit("  跳过信息不完整项")
+                                continue
                             
                             date_part = info[:10]
                             remaining_info = info[10:]
@@ -231,8 +321,9 @@ class Worker(QObject):
                             agent_part = ''
                             region_part = ''
                             
-                            # 调试信息
-                            self.progress_update.emit(f"  解析数据: {remaining_info[:50]}...")
+                            # 调试信息 - 减少输出频率
+                            if i % 5 == 0:  # 每5条记录输出一次
+                                self.progress_update.emit(f"  解析数据: {remaining_info[:30]}...")
                             
                             # 使用更精确的方式解析
                             # 先找到所有标识位置
@@ -271,8 +362,9 @@ class Worker(QObject):
                                 if '采购人：' not in potential_region and '代理机构：' not in potential_region:
                                     region_part = potential_region
                             
-                            # 调试输出解析结果
-                            self.progress_update.emit(f"    解析结果: 采购人={buyer_part}, 代理={agent_part}, 区域={region_part}")
+                            # 调试输出解析结果 - 减少输出频率
+                            if i % 5 == 0:  # 每5条记录输出一次
+                                self.progress_update.emit(f"    解析结果: 采购人={buyer_part[:20]}, 代理={agent_part[:20]}, 区域={region_part[:20]}")
                             
                             # 获取公告类型名称
                             bid_type_name = self._get_bid_type_name(self.config.get('bid_type', '0'))
@@ -283,9 +375,15 @@ class Worker(QObject):
                             # 更新数据行结构: 序号、关键字、名称、日期、采购人、代理机构、公告类型、详情、项目概况
                             row = [len(sheetdata) + 1, search_keyword, title, date_part, buyer_part, agent_part, bid_type_name, link_href, summary]
                             sheetdata.append(row)
-                            self.progress_update.emit(f"  已获取第 {i+1} 条数据: {title[:30]}...")
-                        except (ValueError, IndexError) as e:
+                            
+                            # 减少日志输出频率
+                            if i % 10 == 0:  # 每10条记录输出一次
+                                self.progress_update.emit(f"  已获取第 {i+1} 条数据: {title[:20]}...")
+                        except (ValueError, IndexError, AttributeError) as e:
                             self.progress_update.emit(f"解析数据时出错，跳过此条记录: {e}")
+                            continue
+                        except Exception as e:
+                            self.progress_update.emit(f"处理数据时出现未知错误，跳过此条记录: {e}")
                             continue
                             
         except Exception as e:
@@ -321,10 +419,6 @@ class MainWindow(QMainWindow):
         self.crawled_data = []
         self.init_ui()
         self.load_config()
-        
-        # 确保程序关闭时正确清理资源
-        import atexit
-        atexit.register(self.cleanup_resources)
 
     def cleanup_resources(self):
         """清理资源"""
@@ -333,17 +427,24 @@ class MainWindow(QMainWindow):
                 if self.worker:
                     self.worker.stop()
                 self.thread.quit()
-                self.thread.wait(2000)
+                self.thread.wait(5000)  # 增加等待时间到5秒
                 if self.thread.isRunning():
                     self.thread.terminate()
+                    self.thread.wait(2000)  # 等待终止完成
             
+            # 断开所有信号连接
             if self.worker:
+                try:
+                    self.worker.disconnect()
+                except:
+                    pass
                 self.worker.deleteLater()
                 self.worker = None
             if self.thread:
                 self.thread.deleteLater()
                 self.thread = None
-        except:
+        except Exception as e:
+            print(f"清理资源时出错: {e}")
             pass
 
     def init_ui(self):
@@ -386,7 +487,7 @@ class MainWindow(QMainWindow):
 
         # 第一列：关键词和采购人名称
         search_layout.addWidget(QLabel("关键词:"), 0, 0)
-        self.keyword_input = QLineEdit("公告")
+        self.keyword_input = QLineEdit()  # 移除默认值
         search_layout.addWidget(self.keyword_input, 1, 0)
 
         # 采购人名称标签和输入框在同一行
@@ -406,15 +507,13 @@ class MainWindow(QMainWindow):
             ("今天", "today"), 
             ("三天内", "3days"),
             ("一周内", "1week"),
-            ("半月内", "2weeks"),
             ("一月内", "1month"),
             ("三月内", "3months"),
-            ("半年内", "6months"),
-            ("一年内", "1year")
+            ("半年内", "6months")
         ]
         for name, value in time_presets:
             self.time_preset_combo.addItem(name, value)
-        self.time_preset_combo.setCurrentIndex(2)  # Default to "三天内"
+        self.time_preset_combo.setCurrentIndex(0)  # Default to "自定义"
         self.time_preset_combo.currentIndexChanged.connect(self._on_time_preset_changed)
         search_layout.addWidget(self.time_preset_combo, 4, 0)
 
@@ -561,6 +660,22 @@ class MainWindow(QMainWindow):
         self.auto_save_checkbox.setChecked(True)
         layout.addRow("", self.auto_save_checkbox)
 
+        # 添加代理设置
+        self.use_proxy_checkbox = QCheckBox("使用代理服务器")
+        self.use_proxy_checkbox.setChecked(False)
+        layout.addRow("网络设置:", self.use_proxy_checkbox)
+
+        proxy_h_layout = QHBoxLayout()
+        self.proxy_host_input = QLineEdit("127.0.0.1")
+        self.proxy_port_input = QSpinBox()
+        self.proxy_port_input.setRange(1, 65535)
+        self.proxy_port_input.setValue(7890)
+        proxy_h_layout.addWidget(QLabel("代理地址:"))
+        proxy_h_layout.addWidget(self.proxy_host_input)
+        proxy_h_layout.addWidget(QLabel("端口:"))
+        proxy_h_layout.addWidget(self.proxy_port_input)
+        layout.addRow("", proxy_h_layout)
+
         return tab
 
     def _log(self, message):
@@ -592,39 +707,63 @@ class MainWindow(QMainWindow):
             start_date = current_date.addDays(-3)
         elif preset == "1week":
             start_date = current_date.addDays(-7)
-        elif preset == "2weeks":
-            start_date = current_date.addDays(-14)
         elif preset == "1month":
             start_date = current_date.addMonths(-1)
         elif preset == "3months":
             start_date = current_date.addMonths(-3)
         elif preset == "6months":
             start_date = current_date.addMonths(-6)
-        elif preset == "1year":
-            start_date = current_date.addYears(-1)
         else:
             start_date = current_date.addDays(-3)
         
         self.start_date_input.setDate(start_date)
         self.end_date_input.setDate(current_date)
 
+    def _get_time_type(self):
+        """根据时间预设选择返回对应的timeType值"""
+        preset = self.time_preset_combo.currentData()
+        time_type_map = {
+            "today": 0,      # 今日
+            "3days": 1,      # 三日内
+            "1week": 2,      # 一周内
+            "1month": 3,     # 一月内
+            "3months": 4,    # 三月内
+            "6months": 5,    # 半年内
+            "custom": 6      # 自定义时间
+        }
+        return time_type_map.get(preset, 6)  # 默认为自定义时间
+
     def _get_current_config(self):
+        # 获取原始日期
+        start_date = self.start_date_input.date()
+        end_date = self.end_date_input.date()
+        
+        # 尝试不同的日期格式
+        start_date_str = start_date.toString("yyyy-MM-dd")
+        end_date_str = end_date.toString("yyyy-MM-dd")
+        
         return {
             # Crawler Config
             "buyer_name": self.buyer_name_input.text(),
             "keyword": self.keyword_input.text(),
-            "start_date": self.start_date_input.date().toString("yyyy:MM:dd"),
-            "end_date": self.end_date_input.date().toString("yyyy:MM:dd"),
+            "start_date": start_date_str,
+            "end_date": end_date_str,
             "zone_id": self.region_combo.currentData(),
             "bid_type": self.bid_type_combo.currentData(),
             "save_path": self.save_path_input.text(),
             "output_prefix": self.output_prefix_input.text(),
             "agent_name": self.agent_name_input.text(),
+            "time_type": self._get_time_type(),  # 添加timeType
 
             # Advanced Config
             "min_delay": self.min_delay_input.value(),
             "max_delay": self.max_delay_input.value(),
             "auto_save": self.auto_save_checkbox.isChecked(),
+            
+            # Proxy Config
+            "use_proxy": self.use_proxy_checkbox.isChecked(),
+            "proxy_host": self.proxy_host_input.text(),
+            "proxy_port": self.proxy_port_input.value(),
         }
 
     def save_config(self):
@@ -651,11 +790,11 @@ class MainWindow(QMainWindow):
 
             # Crawler Config
             self.buyer_name_input.setText(config.get("buyer_name", ""))
-            self.keyword_input.setText(config.get("keyword", "公告"))
-            self.start_date_input.setDate(QDate.fromString(config.get("start_date", QDate.currentDate().addDays(-3).toString("yyyy:MM:dd")), "yyyy:MM:dd"))
-            self.end_date_input.setDate(QDate.fromString(config.get("end_date", QDate.currentDate().toString("yyyy:MM:dd")), "yyyy:MM:dd"))
+            self.keyword_input.setText(config.get("keyword", ""))
+            self.start_date_input.setDate(QDate.fromString(config.get("start_date", QDate.currentDate().addDays(-3).toString("yyyy-MM-dd")), "yyyy-MM-dd"))
+            self.end_date_input.setDate(QDate.fromString(config.get("end_date", QDate.currentDate().toString("yyyy-MM-dd")), "yyyy-MM-dd"))
 
-
+            # Set ComboBoxes by data, not text
             zone_id = config.get("zone_id", "45")
             index = self.region_combo.findData(zone_id)
             if index != -1: self.region_combo.setCurrentIndex(index)
@@ -672,6 +811,11 @@ class MainWindow(QMainWindow):
             self.min_delay_input.setValue(config.get("min_delay", 2))
             self.max_delay_input.setValue(config.get("max_delay", 6))
             self.auto_save_checkbox.setChecked(config.get("auto_save", True))
+            
+            # Proxy Config
+            self.use_proxy_checkbox.setChecked(config.get("use_proxy", False))
+            self.proxy_host_input.setText(config.get("proxy_host", "127.0.0.1"))
+            self.proxy_port_input.setValue(config.get("proxy_port", 7890))
 
             self._log("配置已加载。")
         except Exception as e:
@@ -731,14 +875,18 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("爬虫任务完成")
         
         # 安全地获取数据
-        if self.worker:
-            self.crawled_data = self.worker.current_crawled_data
-        else:
+        try:
+            if self.worker and hasattr(self.worker, 'current_crawled_data'):
+                self.crawled_data = self.worker.current_crawled_data.copy()  # 创建副本
+            else:
+                self.crawled_data = []
+        except Exception as e:
+            self._log(f"获取爬虫数据时出错: {e}")
             self.crawled_data = []
             
         self._log("爬虫线程已结束。")
         
-        # 清理线程引用
+        # 延迟清理线程引用，避免内存访问错误
         if self.thread:
             self.thread.deleteLater()
             self.thread = None
@@ -813,6 +961,7 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == '__main__':
+    app = None
     try:
         # 设置Qt平台插件路径
         if hasattr(sys, 'frozen'):
@@ -830,7 +979,12 @@ if __name__ == '__main__':
         app = QApplication(sys.argv)
         ex = MainWindow()
         ex.show()
-        sys.exit(app.exec())
+        exit_code = app.exec()
+        
+        # 确保在退出前清理资源
+        ex.cleanup_resources()
+        sys.exit(exit_code)
+        
     except Exception as e:
         print(f"应用启动失败，错误信息: {e}")
         print("\n可能的解决方案:")
@@ -839,3 +993,7 @@ if __name__ == '__main__':
         print("3. 如果错误信息包含'platform plugin'，请确保Qt平台插件正确安装")
         print("4. 重新启动计算机后再试")
         sys.exit(1)
+    finally:
+        if app:
+            app.quit()
+            app.deleteLater()

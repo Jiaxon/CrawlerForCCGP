@@ -1,14 +1,18 @@
 {
     "buyer_name": "",
-    "keyword": "医疗设备",
-    "start_date": "2025:07:09",
-    "end_date": "2025:07:09",
+    "keyword": "",
+    "start_date": "2025-07-09",
+    "end_date": "2025-07-12",
     "zone_id": "45",
-    "bid_type": "1",
+    "bid_type": "0",
     "save_path": "",
     "output_prefix": "",
     "agent_name": "",
+    "time_type": 1,
     "min_delay": 2,
     "max_delay": 6,
-    "auto_save": true
+    "auto_save": true,
+    "use_proxy": false,
+    "proxy_host": "127.0.0.1",
+    "proxy_port": 7890
 }
